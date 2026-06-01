@@ -4,18 +4,19 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-# Configuration visuelle
-st.set_page_config(layout="wide", page_title="Dashboard Boursier")
+# Configuration globale
+st.set_page_config(layout="wide", page_title="Dashboard Boursier Pro")
 st.markdown("""<style>.stApp {background-color: #0e1117; color: white;}</style>""", unsafe_allow_html=True)
 
 # 1. Chargement des données
 @st.cache_data
 def load_db():
+    # Chargement du CSV. Vérifiez que le nom est identique.
     return pd.read_csv('Analyse ACTION - DATA BASE.csv')
 
 df_base = load_db()
 
-# 2. Fonctions techniques
+# 2. Fonctions techniques hebdomadaires
 @st.cache_data
 def get_data(ticker, years):
     data = yf.download(ticker, period=f"{years}y", interval='1wk', progress=False)
@@ -41,28 +42,30 @@ def plot_graph(ticker, years):
     fig.update_layout(template="plotly_dark", title=f"{years} ans", height=400, showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
-# 3. Interface principale
-st.title("Mon Tableau de Bord Boursier")
-tab1, tab2 = st.tabs(["📊 Analyse Technique (Graphiques)", "📈 Analyse Fondamentale (Data)"])
+# 3. Interface Tabs
+st.title("Tableau de Bord Boursier")
+tab1, tab2 = st.tabs(["📊 Analyse Technique", "📈 Analyse Fondamentale"])
 
-# Onglet 1 : Graphiques
 with tab1:
-    tickers = df_base['TICKER'].dropna().unique()
-    selected = st.multiselect("Actions à afficher :", tickers, default=[tickers[0]])
+    # Nettoyage des tickers (ex: "EPA:TTE" -> "TTE.PA")
+    all_tickers = df_base['TICKER'].dropna().unique()
+    selected = st.multiselect("Actions à visualiser :", all_tickers, default=[all_tickers[0]])
     for t in selected:
-        st.subheader(f"Action : {t}")
+        st.subheader(f"Analyse technique : {t}")
         c1, c2 = st.columns(2)
         with c1: plot_graph(t, 10)
         with c2: plot_graph(t, 20)
 
-# Onglet 2 : Dashboard Fondamental
 with tab2:
-    target = st.selectbox("Choisir l'action pour les détails :", df_base['TICKER'].unique())
+    st.subheader("Fiche d'identité financière")
+    target = st.selectbox("Choisir l'action pour les détails :", all_tickers)
     row = df_base[df_base['TICKER'] == target].iloc[0]
-    st.write("---")
+    
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("PER", row.get('PER', 'N/A'))
-    c2.metric("Dette/EBITDA", row.get('Dette/EBITDA', 'N/A'))
-    c3.metric("Score Value", row.get('SCORE VALUE', 'N/A'))
-    c4.metric("Dividende %", row.get('Dividende %', 'N/A'))
-    st.table(row) # Affiche toutes les colonnes du CSV pour cette ligne
+    c1.metric("PER", str(row.get('Per', 'N/A')))
+    c2.metric("Dette/EBITDA", str(row.get('Dette/EBITDA', 'N/A')))
+    c3.metric("Score Value", str(row.get('SCORE VALUE', 'N/A')))
+    c4.metric("Dividende %", str(row.get('Dividende %', 'N/A')))
+    
+    st.write("---")
+    st.dataframe(row, use_container_width=True)
