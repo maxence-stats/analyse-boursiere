@@ -2,16 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
-# Configuration pour un look sombre (dark mode)
-st.set_page_config(layout="wide", page_title="Analyse Boursière")
-st.markdown("""
-    <style>
-    .stApp {background-color: #0e1117; color: white;}
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("Analyse Boursière : Régression et Volatilité")
+st.set_page_config(layout="wide")
+st.title("Analyse Boursière : Régression Linéaire Hebdomadaire")
 
 tickers_list = [
     "TTE.PA", "AI.PA", "MC.PA", "RACE.MI", "VRLA.PA", "NESN.SW", "SU.PA", "RMS.PA", 
@@ -25,8 +19,9 @@ tickers_list = [
 ]
 
 @st.cache_data
-def get_regression_data(ticker, years):
-    data = yf.download(ticker, period=f"{years}y", progress=False)
+def get_data(ticker, years):
+    # Données hebdomadaires pour un lissage identique à vos graphiques
+    data = yf.download(ticker, period=f"{years}y", interval='1wk', progress=False)
     if data.empty: return None
     
     y = data['Close'].iloc[:, 0].values if isinstance(data['Close'], pd.DataFrame) else data['Close'].values
@@ -35,27 +30,28 @@ def get_regression_data(ticker, years):
     slope, intercept = np.polyfit(x, y, 1)
     reg = slope * x + intercept
     std = np.std(y)
-    
-    # Création du DataFrame pour le graphique
-    return pd.DataFrame({
-        'Prix': y, 
-        'Régression': reg, 
-        '+1σ (Blue)': reg+std, '-1σ (Blue)': reg-std, 
-        '+2σ (Red)': reg+2*std, '-2σ (Red)': reg-2*std
-    }, index=data.index)
+    return data.index, y, reg, std
 
-selected_tickers = st.multiselect("Sélectionnez vos actions à afficher :", tickers_list, default=["TTE.PA"])
+def plot_graph(ticker, years):
+    data = get_data(ticker, years)
+    if not data: return
+    idx, y, reg, std = data
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=idx, y=y, name='Prix', line=dict(color='black', width=1.5)))
+    fig.add_trace(go.Scatter(x=idx, y=reg, name='Régression', line=dict(color='red', width=2)))
+    fig.add_trace(go.Scatter(x=idx, y=reg+std, name='+1σ', line=dict(color='blue', dash='dot')))
+    fig.add_trace(go.Scatter(x=idx, y=reg-std, name='-1σ', line=dict(color='blue', dash='dot')))
+    fig.add_trace(go.Scatter(x=idx, y=reg+2*std, name='+2σ', line=dict(color='red', dash='dot')))
+    fig.add_trace(go.Scatter(x=idx, y=reg-2*std, name='-2σ', line=dict(color='red', dash='dot')))
+    
+    fig.update_layout(template="plotly_white", title=f"Horizon {years} ans", height=400, margin=dict(l=20, r=20, t=50, b=20), showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+
+selected_tickers = st.multiselect("Sélectionnez les entreprises :", tickers_list, default=["TTE.PA"])
 
 for t in selected_tickers:
     st.subheader(f"Action : {t}")
     col1, col2 = st.columns(2)
-    
-    data10 = get_regression_data(t, 10)
-    data20 = get_regression_data(t, 20)
-    
-    with col1:
-        st.write("Horizon 10 Ans")
-        if data10 is not None: st.line_chart(data10)
-    with col2:
-        st.write("Horizon 20 Ans")
-        if data20 is not None: st.line_chart(data20)
+    with col1: plot_graph(t, 10)
+    with col2: plot_graph(t, 20)
